@@ -155,8 +155,8 @@ df['ssc'] = df['cln'].apply(lambda t: viz.polarity_scores(t)['compound'])  # sen
 df['slb'] = df['ssc'].apply(lambda s: 'Positive' if s >= 0.05 else ('Negative' if s <= -0.05 else 'Neutral'))  # sentiment label
 
 # explosion
-exp = df.explode('ent')
-smr = exp.groupby('ent').agg(
+
+
     cnt=('id', 'count'),
     avs=('ssc', 'mean'),
     pos=('slb', lambda x: (x == 'Positive').sum()),

@@ -7,48 +7,44 @@ import config
 from datetime import datetime
 
 sbn = "IndianStreetBets"
-hlm = 25
-tlm = 50
-clm = 20
+hlm = 25  # hotposts  limit
+tlm = 50  # top postslimit
+clm = 20  # comments limit
 
-tgt = [
-    'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'HINDUNILVR',
-    'ITC', 'SBIN', 'BAJFINANCE', 'BHARTIARTL', 'KOTAKBANK', 'LT',
-    'ASIANPAINT', 'AXISBANK', 'MARUTI', 'TITAN', 'WIPRO', 'ULTRACEMCO',
-    'ADANIENT', 'ADANIPORTS', 'NESTLEIND', 'POWERGRID', 'NTPC',
-    'TATAMOTORS', 'TATASTEEL', 'JSWSTEEL', 'SUNPHARMA', 'ONGC',
-    'INDUSINDBK', 'CIPLA', 'DRREDDY', 'DIVISLAB', 'HCLTECH',
-    'HDFCLIFE', 'SBILIFE', 'BAJAJFINSV', 'TECHM', 'GRASIM', 'BPCL',
-    'SHREECEM', 'HEROMOTOCO', 'EICHERMOT', 'COALINDIA', 'BRITANNIA',
-    'UPL', 'APOLLOHOSP', 'HINDALCO', 'BAJAJ-AUTO',
-    'PARAG PARIKH FLEXI CAP', 'AXIS BLUECHIP', 'MIRAE ASSET LARGE CAP',
-    'NIFTY', 'BANKNIFTY', 'SENSEX', 'IPO', 'FPO'
-]
-tgt = [t.upper() for t in tgt]
+tgt = [ 'RELIANCE', 'TCS', 'HDFCBANK', 'BHARTIARTL', 'ICICIBANK',
+'INFY', 'SBIN', 'HINDUNILVR', 'BAJFINANCE', 'ITC']
+tgt = [t.upper() for t in tgt]  # uppercase
 
-urp = re.compile(r"http\S+|www\S+|https\S+", re.MULTILINE)
-mnp = re.compile(r"@\w+|#")
-nap = re.compile(r"[^a-zA-Z\s\$]")
-spp = re.compile(r"\s+")
+# regex
+urp = re.compile(r"http\S+|www\S+|https\S+", re.MULTILINE)  # urls 
+mnp = re.compile(r"@\w+|#")  # mentions (hogging a lot of data)
+
 
 def ptx(txt):
+    # cleaning data and normalizing
     if not isinstance(txt, str): return ""
     txt = txt.lower()
-    txt = urp.sub('', txt)
-    txt = mnp.sub('', txt)
-    txt = nap.sub('', txt)
-    return spp.sub(' ', txt).strip()
+    txt = urp.sub('', txt)  # remove urls
+    txt = mnp.sub('', txt)  # remove mentions/hashtags
+    txt = nap.sub('', txt)  # remove non-alphanumeric except $
+    return spp.sub(' ', txt).strip()  # normalize spaces
 
 def fnd(txt, ens):
+    # find entities
     fds = set()
     up = txt.upper()
     wds = up.split()
+
+    
+
     for e in ens:
-        if e in wds or f'${e}' in up:
+        if e in up:
             fds.add(e)
+
     return list(fds)
 
 def gsn(scr):
+    # sentiment based on score
     if scr >= 0.5: return "Very Positive"
     if scr >= 0.05: return "Positive"
     if scr <= -0.5: return "Very Negative"
@@ -56,6 +52,7 @@ def gsn(scr):
     return "Neutral"
 
 def smd(df, fn="isb_report.md", tot=0, st=None):
+    # markdown report
     if df.empty: return
     now = datetime.now()
     dur = (now - st).total_seconds() if st else 0
@@ -76,16 +73,17 @@ def smd(df, fn="isb_report.md", tot=0, st=None):
     rep['AvgScore'] = rep['AvgScore'].map('{:.2f}'.format)
     with open(fn, 'w', encoding='utf-8') as f:
         f.write(f"# r/{sbn} Sentiment Analysis\n\n")
-        f.write(f"Generated: {now:%Y-%m-%d %H:%M:%S}\n")
+    
         f.write(f"Duration: {dur:.2f} secs\n")
-        f.write(f"Total Items: {tot}\n\n")
-        f.write("## Summary by Entity\n\n")
+        
+        f.write("## Summary by SLAY3R\n")
+       
         f.write(rep.to_markdown(index=False))
-        f.write("\n\n---\n")
-        f.write("Disclaimer: automated analysis, not financial advice\n")
+        
 
-st = datetime.now()
+st = datetime.now() 
 try:
+    # reddit setup
     r = praw.Reddit(
         client_id=config.REDDIT_CLIENT_ID,
         client_secret=config.REDDIT_CLIENT_SECRET,
@@ -98,10 +96,11 @@ except Exception as e:
     exit()
     
 sub = r.subreddit(sbn)
-dt = []
-seen = set()
+dt = [] 
+seen = set() 
 
 def psb(sbs):
+    # submissions batch
     global dt, seen
     for p in sbs:
         if p.id in seen: continue
@@ -116,10 +115,10 @@ def psb(sbs):
             'utc': p.created_utc
         })
         try:
-            p.comments.replace_more(limit=0)
+            p.comments.replace_more(limit=0)  # loading comments
             n = 0
             for c in p.comments.list():
-                if n >= clm: break
+                if n >= clm: break  # if comment limit reached
                 if c.id in seen: continue
                 seen.add(c.id)
                 dt.append({
@@ -135,23 +134,27 @@ def psb(sbs):
         except:
             pass
 
+# geting posts
 psb(sub.hot(limit=hlm))
 psb(sub.top(time_filter='week', limit=tlm))
 
 if not dt: exit()
     
+# dataframe
 df = pd.DataFrame(dt)
-df['ftx'] = df['ttl'].fillna('') + ' ' + df['txt'].fillna('')
-df['cln'] = df['ftx'].apply(ptx)
-df['ent'] = df['cln'].apply(lambda t: fnd(t, tgt))
-df = df[df['ent'].map(len) > 0]
+df['ftx'] = df['ttl'].fillna('') + ' ' + df['txt'].fillna('')  # full text
+df['cln'] = df['ftx'].apply(ptx)  # cleaned text
+df['ent'] = df['cln'].apply(lambda t: fnd(t, tgt))  # find entities
+df = df[df['ent'].map(len) > 0]  # keep only rows with entities
 
 if df.empty: exit()
     
+# sentiment analysis
 viz = SentimentIntensityAnalyzer()
-df['ssc'] = df['cln'].apply(lambda t: viz.polarity_scores(t)['compound'])
-df['slb'] = df['ssc'].apply(lambda s: 'Positive' if s >= 0.05 else ('Negative' if s <= -0.05 else 'Neutral'))
+df['ssc'] = df['cln'].apply(lambda t: viz.polarity_scores(t)['compound'])  # sentiment score
+df['slb'] = df['ssc'].apply(lambda s: 'Positive' if s >= 0.05 else ('Negative' if s <= -0.05 else 'Neutral'))  # sentiment label
 
+# explosion
 exp = df.explode('ent')
 smr = exp.groupby('ent').agg(
     cnt=('id', 'count'),
@@ -161,5 +164,6 @@ smr = exp.groupby('ent').agg(
     neu=('slb', lambda x: (x == 'Neutral').sum())
 ).reset_index().sort_values('cnt', ascending=False)
 
+# saving
 smr.to_csv('sentiment_summary.csv', index=False)
 smd(smr, 'sentiment_report.md', len(dt), st)
